@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Pickup confirmation · BLOCK SYSTEM Hardware</title>
+<style>
+  /* One column, phone first: what you collect, your name, your signature, confirm. */
+  :root { --bg: #f4f4f1; --card: #ffffff; --ink: #15181c; --ink-2: #5d6470; --rule: #d9dbd6; --accent: #c64e0c; --ok: #1c6244; --bad: #9e211b; color-scheme: light; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #121419; --card: #1b1e24; --ink: #e8ebef; --ink-2: #9aa2ae; --rule: #2e333b; --accent: #ff8542; --ok: #4fbf8b; --bad: #e97a70; color-scheme: dark; } }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  main { max-width: 520px; margin: 0 auto; padding: max(18px, env(safe-area-inset-top)) 16px 32px; display: grid; gap: 16px; }
+  .brand { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+  h1 { font-size: 26px; line-height: 1.15; margin: 4px 0 0; }
+  .nl { color: var(--ink-2); font-size: 14px; font-style: italic; }
+  .card { background: var(--card); border: 1px solid var(--rule); border-radius: 10px; padding: 16px; display: grid; gap: 10px; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; }
+  dt { color: var(--ink-2); font-size: 14px; } dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+  label { font-weight: 600; display: grid; gap: 6px; }
+  input[type=text] { font: inherit; padding: 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; }
+  .pad { position: relative; }
+  canvas { width: 100%; height: 190px; border: 1px dashed var(--ink-2); border-radius: 8px; background: var(--bg); touch-action: none; display: block; }
+  .hint { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink-2); pointer-events: none; font-size: 15px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  button { font: inherit; font-weight: 600; border-radius: 8px; padding: 14px 18px; border: 1px solid var(--ink); background: var(--ink); color: var(--card); cursor: pointer; width: 100%; }
+  button.link { width: auto; padding: 6px 10px; background: none; color: var(--ink-2); border-color: var(--rule); font-weight: 500; font-size: 14px; }
+  button:disabled { opacity: .5; }
+  .statement { font-size: 15px; margin: 0; }
+  .msg { padding: 16px; border-radius: 10px; border: 1px solid var(--rule); background: var(--card); }
+  .msg.ok { border-color: var(--ok); } .msg.bad { border-color: var(--bad); }
+  .msg h2 { margin: 0 0 6px; font-size: 20px; }
+  .err { color: var(--bad); font-size: 14px; min-height: 1em; margin: 0; }
+  .small { font-size: 13px; color: var(--ink-2); margin: 0; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <div class="brand">BLOCK SYSTEM Hardware · bitchboy</div>
+    <h1>Pickup confirmation</h1>
+    <div class="nl">Afhaalbevestiging</div>
+  </div>
+  <div id="view"><p class="small">Loading…</p></div>
+  <p class="small">BLOCK SYSTEM Hardware · KvK 99889919 · bitchboy.lol</p>
+</main>
+<script>
+const API = "https://iahztsmeyqcswoagpmme.supabase.co/functions/v1/pickup-sign";
+const token = new URLSearchParams(location.search).get("t") || "";
+const view = document.getElementById("view");
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const day = (t) => t ? new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "";
+
+const message = (cls, title, text) => { view.innerHTML = `<div class="msg ${cls}"><h2>${title}</h2><p class="small">${text}</p></div>`; };
+const DEAD = {
+  invalid: ["This link doesn't work", "Ask the person handing over your Bitchboy for a new QR code. <i>Vraag om een nieuwe QR-code.</i>"],
+  expired: ["This link has expired", "Links work for 24 hours. Ask for a new QR code. <i>Deze link is verlopen.</i>"],
+  signed:  ["Already confirmed", "This pickup has already been signed. Thank you! <i>Al bevestigd, dank je!</i>"],
+};
+
+async function load() {
+  try {
+    const r = await fetch(`${API}?t=${encodeURIComponent(token)}`);
+    const d = await r.json();
+    if (d.state !== "ok") return message(d.state === "signed" ? "ok" : "bad", ...(DEAD[d.state] ?? DEAD.invalid));
+    render(d);
+  } catch { message("bad", "No connection", "Check your internet connection and reload this page."); }
+}
+
+function render(d) {
+  view.innerHTML = `
+    <div class="card">
+      <dl>
+        <dt>Product</dt><dd>${esc(d.product)}</dd>
+        <dt>Serial</dt><dd>${esc(d.serials.join(", ") || "–")}</dd>
+        <dt>Ordered</dt><dd>${esc(day(d.ordered))}</dd>
+        ${d.place ? `<dt>Pickup at</dt><dd>${esc(d.place)}</dd>` : ""}
+      </dl>
+    </div>
+    <form class="card" id="f" novalidate>
+      <p class="statement">I confirm I received the item above in good working condition.<br><span class="nl">Ik bevestig dat ik bovenstaand product in goede staat heb ontvangen.</span></p>
+      <label for="name">Your full name <span class="nl">/ volledige naam</span>
+        <input type="text" id="name" autocomplete="name" required maxlength="100">
+      </label>
+      <div>
+        <div class="row"><strong>Sign here with your finger <span class="nl">/ teken hier</span></strong><button type="button" class="link" id="clear">Clear</button></div>
+        <div class="pad"><canvas id="sig" aria-label="Signature box"></canvas><div class="hint" id="hint">Sign here</div></div>
+      </div>
+      <p class="err" id="err" role="alert"></p>
+      <button type="submit" id="go">Confirm pickup <span class="nl" style="color:inherit">/ bevestigen</span></button>
+    </form>`;
+  setupPad();
+  document.getElementById("f").onsubmit = submit;
+}
+
+let ink = 0, ctx, canvas;
+function setupPad() {
+  canvas = document.getElementById("sig");
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const size = () => { const r = canvas.getBoundingClientRect(); canvas.width = r.width * dpr; canvas.height = r.height * dpr; ctx = canvas.getContext("2d"); ctx.scale(dpr, dpr); ctx.lineWidth = 2.4; ctx.lineCap = ctx.lineJoin = "round"; ctx.strokeStyle = "#111"; ink = 0; document.getElementById("hint").hidden = false; };
+  size();
+  let last = null;
+  const at = (e) => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  canvas.onpointerdown = (e) => { canvas.setPointerCapture(e.pointerId); last = at(e); document.getElementById("hint").hidden = true; };
+  canvas.onpointermove = (e) => { if (!last) return; const p = at(e); ctx.beginPath(); ctx.moveTo(...last); ctx.lineTo(...p); ctx.stroke(); ink += Math.hypot(p[0] - last[0], p[1] - last[1]); last = p; };
+  canvas.onpointerup = canvas.onpointercancel = () => { last = null; };
+  document.getElementById("clear").onclick = size;
+}
+
+// the stored image: dark strokes on white, whatever the phone's theme
+function signaturePng() {
+  const out = document.createElement("canvas"); out.width = canvas.width; out.height = canvas.height;
+  const c = out.getContext("2d"); c.fillStyle = "#fff"; c.fillRect(0, 0, out.width, out.height); c.drawImage(canvas, 0, 0);
+  return out.toDataURL("image/png");
+}
+
+async function submit(e) {
+  e.preventDefault();
+  const err = document.getElementById("err"), btn = document.getElementById("go"), name = document.getElementById("name").value.trim();
+  if (name.length < 2) { err.textContent = "Please type your full name."; return; }
+  if (ink < 40) { err.textContent = "Please sign in the box."; return; }
+  err.textContent = ""; btn.disabled = true; btn.textContent = "Saving…";
+  try {
+    const r = await fetch(API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ t: token, name, signature: signaturePng() }) });
+    const d = await r.json();
+    if (d.state === "done") return message("ok", "Thank you! 🎛️", `Your pickup is confirmed. Enjoy your Bitchboy.<br><i>Bedankt, je afhaling is bevestigd.</i>`);
+    if (DEAD[d.state]) return message(d.state === "signed" ? "ok" : "bad", ...DEAD[d.state]);
+    err.textContent = d.error || "Something went wrong. Please try again.";
+  } catch { err.textContent = "No connection. Check your internet and try again."; }
+  btn.disabled = false; btn.textContent = "Confirm pickup";
+}
+
+if (!token) message("bad", ...DEAD.invalid); else load();
+</script>
+</body>
+</html>
