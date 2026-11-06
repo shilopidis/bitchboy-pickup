@@ -88,7 +88,9 @@ function show(d, edit) {
   if (d.state === "open" || edit) return form(d.buyer || {}, d.expires_at);
   if (d.state === "submitted") return submitted(d.buyer);
   if (d.state === "declined") return message("bad", "We can't take this order", esc(d.reason || "Sorry: we can't deliver this order. Message us on Instagram for questions."));
-  if (d.state === "paid") return message("ok", "Paid, thank you! 🎛️", "Stripe emails you the receipt and invoice. We'll message you when your BitchBoy ships or is ready to pick up.");
+  if (d.state === "paid") return message("ok", "Paid, thank you! 🎛️", d.pay_method && d.pay_method !== "stripe"
+    ? `We received your payment. Your invoice ${esc(d.invoice_no || "")}: <a href="${invoiceUrl()}" target="_blank" rel="noopener">download (PDF)</a>. We'll message you when your BitchBoy ${d.delivery === "pickup" ? "is ready to pick up" : "ships"}.`
+    : "Stripe emails you the receipt and invoice. We'll message you when your BitchBoy ships or is ready to pick up.");
   if (d.state === "approved") return approved(d);
   if (d.error) return message("bad", "Something went wrong", esc(d.error));
   message("bad", ...DEAD.invalid);
@@ -199,11 +201,39 @@ function approved(d) {
       </table>
       <p class="small">${d.inclusive ? "Prices include VAT." : "Prices without VAT (export). Import duties and taxes in your country, if any, are paid on delivery."}
       ${d.delivery === "pickup" ? " Pickup in Amsterdam: we agree the time with you." : ""}</p>
+      ${d.pay_method === "bank" ? bankBox(d) : d.pay_method === "cash" ? cashBox(d) : `
       <p class="err" id="err" role="alert"></p>
       <button type="button" class="pay" id="pay">Pay ${eur(d.total_cents)}</button>
-      <p class="small">Secure payment on Stripe (card, iDEAL and more). Your details are filled in for you.</p>
+      <p class="small">Secure payment on Stripe (card, iDEAL and more). Your details are filled in for you.</p>`}
     </div>`;
-  document.getElementById("pay").onclick = pay;
+  const p = document.getElementById("pay"); if (p) p.onclick = pay;
+  view.querySelectorAll("[data-copy]").forEach((b) => b.onclick = async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copy); const t = b.textContent; b.textContent = "Copied ✓"; setTimeout(() => b.textContent = t, 1500); } catch {}
+  });
+}
+
+// bank transfer / cash (NL buyers and pickups): our own invoice instead of Stripe
+const invoiceUrl = () => `${API}?t=${encodeURIComponent(token)}&invoice=1`;
+const longDay = (t) => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
+function bankBox(d) {
+  const row = (k, v, copy) => `<tr><td>${k}</td><td class="n"><b>${esc(v)}</b>${copy ? ` <button type="button" class="link" data-copy="${esc(copy)}">Copy</button>` : ""}</td></tr>`;
+  return `
+      <h2 style="margin-top:6px">Pay by bank transfer</h2>
+      <table>
+        ${row("Amount", eur(d.total_cents), (d.total_cents / 100).toFixed(2))}
+        ${row("To", d.bank.name)}
+        ${row("IBAN", d.bank.iban, d.bank.iban.replace(/\s/g, ""))}
+        ${row("BIC", d.bank.bic)}
+        ${row("Reference", d.pay_ref, d.pay_ref)}
+      </table>
+      <p class="small">Please use exactly this reference, so we can match your payment${d.due ? `, and pay by ${longDay(d.due)}` : ""}. We ${d.delivery === "pickup" ? "hand over" : "ship"} your BitchBoy once it's in; this page then says “Paid”.</p>
+      <a href="${invoiceUrl()}" target="_blank" rel="noopener"><button type="button" class="pay">Your invoice ${esc(d.invoice_no || "")} (PDF)</button></a>`;
+}
+function cashBox(d) {
+  return `
+      <h2 style="margin-top:6px">Pay in cash at the pickup</h2>
+      <p class="small">You pay <b>${eur(d.total_cents)}</b> in cash when you pick up your BitchBoy in Amsterdam. We agree the time and place with you on Instagram.</p>
+      <a href="${invoiceUrl()}" target="_blank" rel="noopener"><button type="button" class="pay">Your invoice ${esc(d.invoice_no || "")} (PDF)</button></a>`;
 }
 
 async function pay() {
