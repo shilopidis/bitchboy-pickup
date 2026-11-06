@@ -190,7 +190,7 @@ function submitted(b) {
 }
 
 function approved(d) {
-  const rows = d.lines.map((l) => `<tr><td>${l.qty > 1 ? `${l.qty}× ` : ""}${esc(l.description)}</td><td class="n">${eur(l.amount_cents)}</td></tr>`).join("");
+  const rows = d.lines.map((l) => `<tr><td>${l.qty > 1 ? `${l.qty}× ` : ""}${esc(l.description)}</td><td class="n">${l.amount_cents ? eur(l.amount_cents) : "<b>free 🎁</b>"}</td></tr>`).join("");
   view.innerHTML = `
     <div class="card">
       <h2>Your order${d.name ? `, ${esc(d.name.split(" ")[0])}` : ""}</h2>
